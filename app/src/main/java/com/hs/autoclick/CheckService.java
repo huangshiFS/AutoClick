@@ -6,21 +6,27 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeInfo;
+
+import java.util.List;
 
 public class CheckService extends AccessibilityService {
     private final String TAG = CheckService.class.getSimpleName();
     private MyBroadCast myBroadCast;
-    public static final String ACTION_UPDATE_SWITCH = "action_update_switch";
+    private Context mContext;
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        Log.d(TAG, "onCreate: ");
-        myBroadCast = new MyBroadCast();
-        myBroadCast.init(this);
-    }
+    public static final String ACTION_UPDATE_SWITCH = "action_update_switch";
+//    @Override
+//    public void onCreate() {
+//        super.onCreate();
+//        Log.d(TAG, "onCreate: ");
+//        myBroadCast = new MyBroadCast();
+//        myBroadCast.init(this);
+//    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -29,29 +35,78 @@ public class CheckService extends AccessibilityService {
         }
 
         String action = intent.getAction();
-        Log.d(TAG, "onStartCommand Aciton: " + action);
+        mContext = getApplicationContext();
+
         return super.onStartCommand(intent, flags, startId);
     }
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        AccessibilityServiceInfo serviceInfo = new AccessibilityServiceInfo();
-        serviceInfo.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
-        serviceInfo.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
-        serviceInfo.packageNames = new String[]{"com.gotokeep.keep", "com.eg.android.AlipayGphone", "com.sinovatech.unicom.ui", "com.tencent.mm"};// 监控的app
-        serviceInfo.notificationTimeout = 100;
-        serviceInfo.flags = serviceInfo.flags | AccessibilityServiceInfo.FLAG_REQUEST_ENHANCED_WEB_ACCESSIBILITY;
-        setServiceInfo(serviceInfo);
-        Log.d(TAG, "onServiceConnected: ");
+
+    }
+
+    public AccessibilityNodeInfo findViewByText(String text, boolean clickable) {
+        AccessibilityNodeInfo accessibilityNodeInfo = getRootInActiveWindow();
+        if (accessibilityNodeInfo == null) {
+            return null;
+        }
+        List<AccessibilityNodeInfo> nodeInfoList = accessibilityNodeInfo.findAccessibilityNodeInfosByText(text);
+        if (nodeInfoList != null && !nodeInfoList.isEmpty()) {
+            for (AccessibilityNodeInfo nodeInfo : nodeInfoList) {
+                if (nodeInfo != null && (nodeInfo.isClickable() == clickable)) {
+                    return nodeInfo;
+                }
+            }
+        }
+        return null;
+    }
+
+    public void performViewClick(AccessibilityNodeInfo nodeInfo) {
+        if (nodeInfo == null) {
+            return;
+        }
+        while (nodeInfo != null) {
+            if (nodeInfo.isClickable()) {
+                nodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                break;
+            }
+            nodeInfo = nodeInfo.getParent();
+        }
+    }
+
+    public void clickTextViewByID(String id) {
+        AccessibilityNodeInfo accessibilityNodeInfo = getRootInActiveWindow();
+        if (accessibilityNodeInfo == null) {
+            return;
+        }
+        List<AccessibilityNodeInfo> nodeInfoList = accessibilityNodeInfo.findAccessibilityNodeInfosByViewId(id);
+        if (nodeInfoList != null && !nodeInfoList.isEmpty()) {
+            for (AccessibilityNodeInfo nodeInfo : nodeInfoList) {
+                if (nodeInfo != null) {
+                    performViewClick(nodeInfo);
+                    break;
+                }
+            }
+        }
     }
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        int eventType = event.getEventType();
+        Log.d(TAG, "onAccessibilityEvent: adadada");
         String packageName = event.getPackageName().toString();
         String className = event.getClassName().toString();
         Log.d(TAG, "packageName = " + packageName + ", className = " + className);
+        //  packageName = com.android.systemui, className = android.app.Dialog
+        if (packageName.equals("com.android.systemui") && className.equals("android.app.Dialog")) {
+            AccessibilityNodeInfo nodeInfo = findViewByText("允许", true);
+            if (nodeInfo != null) {
+                Log.d(TAG, "onAccessibilityEvent: " + nodeInfo);
+                performViewClick(nodeInfo);
+                clickTextViewByID("android:id/button1");
+            }
+
+        }
     }
 
     @Override
